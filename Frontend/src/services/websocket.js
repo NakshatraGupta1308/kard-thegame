@@ -1,9 +1,31 @@
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080').replace(/\/+$/, '')
+const RECONNECT_DELAY = 3000
+const CONNECTION_TIMEOUT = 20000
+const MAX_RETRIES = 20
+
 let client = null
 let connected = false
 let pendingCallbacks = []
+let failedAttempts = 0
+let status = 'connecting' // 'connecting' | 'connected' | 'failed'
+const statusListeners = new Set()
+
+function setStatus(next) {
+  status = next
+  statusListeners.forEach(listener => listener(status))
+}
+
+export function getStatus() {
+  return status
+}
+
+export function onStatusChange(listener) {
+  statusListeners.add(listener)
+  return () => statusListeners.delete(listener)
+}
 
 export function connect(onConnected) {
   if (connected) {
@@ -19,10 +41,12 @@ export function connect(onConnected) {
   pendingCallbacks.push(onConnected)
 
   client = new Client({
-    webSocketFactory: () => new SockJS('https://uno-multiplayer-backend.onrender.com/ws'),
+    webSocketFactory: () => new SockJS(`${BACKEND_URL}/ws`),
     onConnect: () => {
       console.log('WebSocket connected')
       connected = true
+      failedAttempts = 0
+      setStatus('connected')
       pendingCallbacks.forEach(cb => cb())
       pendingCallbacks = []
     },
@@ -31,10 +55,31 @@ export function connect(onConnected) {
       connected = false
       client = null
     },
+    onWebSocketClose: () => {
+      connected = false
+      if (status === 'failed') return
+      failedAttempts++
+      if (failedAttempts >= MAX_RETRIES) {
+        console.warn(`WebSocket gave up after ${failedAttempts} attempts`)
+        client.deactivate()
+        setStatus('failed')
+      } else {
+        setStatus('connecting')
+      }
+    },
     onStompError: (frame) => console.error('STOMP error', frame),
-    reconnectDelay: 5000,
+    reconnectDelay: RECONNECT_DELAY,
+    connectionTimeout: CONNECTION_TIMEOUT,
   })
 
+  setStatus('connecting')
+  client.activate()
+}
+
+export function retry() {
+  if (!client || status !== 'failed') return
+  failedAttempts = 0
+  setStatus('connecting')
   client.activate()
 }
 
