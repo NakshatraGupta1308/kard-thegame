@@ -2,7 +2,7 @@
 
 A real-time multiplayer card game built from scratch as a full-stack software project.
 
-🎮 **Live Demo:** https://uno-multiplayer-frontend.vercel.app
+🎮 **Live Demo:** https://kard-thegame.vercel.app
 
 ## Note on First Load
 The backend runs on Render's free tier, which puts the server to sleep after a period of inactivity. The first visit after a quiet spell can take up to a minute while the server wakes up. The lobby shows a "Waking up the game server" message during this time, retries automatically, and offers a Retry button if the server still cannot be reached.
