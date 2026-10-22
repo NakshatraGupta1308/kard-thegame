@@ -1,6 +1,7 @@
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080').replace(/\/+$/, '')
 const RECONNECT_DELAY = 3000
 const CONNECTION_TIMEOUT = 20000
 const MAX_RETRIES = 20
@@ -40,7 +41,7 @@ export function connect(onConnected) {
   pendingCallbacks.push(onConnected)
 
   client = new Client({
-    webSocketFactory: () => new SockJS('https://uno-multiplayer-backend.onrender.com/ws'),
+    webSocketFactory: () => new SockJS(`${BACKEND_URL}/ws`),
     onConnect: () => {
       console.log('WebSocket connected')
       connected = true
