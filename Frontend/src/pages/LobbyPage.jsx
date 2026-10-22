@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
-import { connect, subscribe, send } from '../services/websocket'
+import { connect, subscribe, send, getStatus, onStatusChange, retry } from '../services/websocket'
 
 export default function LobbyPage({ playerId, onJoinRoom }) {
   const [rooms, setRooms] = useState([])
   const [playerName, setPlayerName] = useState('')
   const [roomName, setRoomName] = useState('')
-  const [connected, setConnected] = useState(false)
+  const [status, setStatus] = useState(getStatus)
+  const connected = status === 'connected'
+
+  useEffect(() => onStatusChange(setStatus), [])
 
   useEffect(() => {
     connect(() => {
-      setConnected(true)
       subscribe('/topic/lobby', (data) => setRooms(data))
       send('/lobby.getRooms', {})
     })
@@ -57,7 +59,11 @@ export default function LobbyPage({ playerId, onJoinRoom }) {
             value={roomName}
             onChange={e => setRoomName(e.target.value)}
           />
-          <button style={styles.btnPrimary} onClick={handleCreate} disabled={!connected}>
+          <button
+            style={{ ...styles.btnPrimary, ...(!connected && styles.btnDisabled) }}
+            onClick={handleCreate}
+            disabled={!connected}
+          >
             Create Room
           </button>
         </div>
@@ -70,7 +76,11 @@ export default function LobbyPage({ playerId, onJoinRoom }) {
           <div key={room.id} style={styles.roomRow}>
             <span style={styles.roomName}>{room.name}</span>
             <span style={styles.roomPlayers}>{room.players.length}/4 players</span>
-            <button style={styles.btnSecondary} onClick={() => handleJoin(room.id)} disabled={!connected || !playerName.trim()}>
+            <button
+              style={{ ...styles.btnSecondary, ...((!connected || !playerName.trim()) && styles.btnDisabled) }}
+              onClick={() => handleJoin(room.id)}
+              disabled={!connected || !playerName.trim()}
+            >
               Join
             </button>
           </div>
@@ -78,7 +88,18 @@ export default function LobbyPage({ playerId, onJoinRoom }) {
       </div>
 
       <div style={styles.status}>
-        {connected ? '🟢 Connected' : '🔴 Connecting...'}
+        {status === 'connected' && '🟢 Connected'}
+        {status === 'connecting' && (
+          <span style={styles.waking}>
+            🟡 Waking up the game server, this can take up to a minute on first load.
+          </span>
+        )}
+        {status === 'failed' && (
+          <>
+            <span style={styles.waking}>🔴 Could not reach the game server.</span>
+            <button style={styles.btnRetry} onClick={retry}>Retry</button>
+          </>
+        )}
       </div>
     </div>
   )
@@ -94,9 +115,12 @@ const styles = {
   row: { display: 'flex', gap: 10, alignItems: 'flex-start' },
   btnPrimary: { padding: '10px 20px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, whiteSpace: 'nowrap' },
   btnSecondary: { padding: '8px 16px', background: '#3498db', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14 },
+  btnDisabled: { opacity: 0.5, cursor: 'not-allowed' },
+  btnRetry: { marginTop: 10, padding: '8px 16px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14 },
   roomRow: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #eee' },
   roomName: { flex: 1, fontWeight: 'bold' },
   roomPlayers: { color: '#888', fontSize: 13 },
   empty: { color: '#aaa', fontStyle: 'italic' },
   status: { textAlign: 'center', fontSize: 13, color: '#888' },
+  waking: { display: 'block' },
 }
